@@ -1,18 +1,39 @@
-import { json, redirect, useRouteLoaderData } from "react-router-dom";
+import {
+  json,
+  redirect,
+  useRouteLoaderData,
+  defer,
+  Await,
+} from "react-router-dom";
 
 import EventItem from "./../components/EventItem";
+import EventsList from "../components/EventsList";
+import { Suspense } from "react";
 
 const EventDetailPage = () => {
-  const eventDetailData = useRouteLoaderData("event-detail");
-  return <EventItem event={eventDetailData.event} />;
+  const data = useRouteLoaderData("event-detail");
+  return (
+    <>
+      <Suspense fallback={<p style={{ textAlign: "center" }}>Loading...</p>}>
+        <Await resolve={data.event}>
+          {(event) => <EventItem event={event} />}
+        </Await>
+      </Suspense>
+      <Suspense fallback={<p style={{ textAlign: "center" }}>Loading...</p>}>
+        <Await resolve={data.events}>
+          {(events) => <EventsList events={events} />}
+        </Await>
+      </Suspense>
+    </>
+  );
 };
 
 export default EventDetailPage;
 
-export const eventDetailLoader = async ({ request, params }) => {
-  const id = params.eventId;
+const loadEvent = async (eventId) => {
+  const id = eventId;
   const response = await fetch("http://localhost:8080/events/" + id, {
-    method: request.method,
+    method: "GET",
   });
 
   if (!response.ok) {
@@ -22,7 +43,24 @@ export const eventDetailLoader = async ({ request, params }) => {
     );
   }
 
-  return response;
+  const responseData = await response.json();
+  return responseData.event;
+};
+
+const loadEvents = async () => {
+  const response = await fetch("http://localhost:8080/events");
+  if (!response.ok) {
+    //return { isError: true, message: "Could not fetch events" };
+    //throw new Response(JSON.stringify({message: 'Could not fetch events'}), {status: 500});
+    throw json({ message: "Could not fetch events" }, { status: 500 });
+  } else {
+    const responseData = await response.json();
+    return responseData.events;
+  }
+};
+
+export const eventDetailLoader = async ({ request, params }) => {
+  return defer({ event: await loadEvent(params.eventId), events: loadEvents() });
 };
 
 export const deleteEventAction = async ({ params }) => {
